@@ -53,7 +53,7 @@ assert ret
 return ret
 ```
 
-- in the *_thm functions, manual creation of `Expr` with `verified=True` should never be allowed. The only way to obtain them should be via calls to other `*_thm` or `*_axiom` functions 
+- in the *_thm functions, manual creation of `Expr` with `certified=True` should never be allowed. The only way to obtain them should be via calls to other `*_thm` or `*_axiom` functions 
 
-- The only Expr with verified=True can be: - literal ones (constants, lists with constants, ...) - expressions produced by theorem functions with zero parameters, or foundational theorem functions with parameters we decide to implement, but in that case we will call them *_axiom
+- The only Expr with certified=True can be: - literal ones (constants, lists with constants, ...) - expressions produced by theorem functions with zero parameters, or foundational theorem functions with parameters we decide to implement, but in that case we will call them *_axiom
 

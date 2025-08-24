@@ -40,8 +40,6 @@ def test_L_match_structural():
         Notice it wouldn't be necessary if we used data classes.
     """
 
-    print("test_L_match_as_structure *********************************")
-
     l1 = L()
     match l1:
         case L():
@@ -59,23 +57,17 @@ def test_L_match_structural():
     assert m2
 
     l3 = L('a', L('b'))
-    print("test_L_match 3")
     match l3:
         case funalg.EL:
             m3 = False
-            print("L()")
         case L('a'):
             m3 = False
-            print("L('a')")
         case L('a', L('b')):
             m3 = True
-            print("L('a', L('b'))")
     #assert m3  # I would like this assert to pass, unfortunately python matching doesn't work the way I'd like  
     assert not m3  #  sic  :-(
 
 def test_L_match_as_sequence():
-
-    print("test_L_match_as_sequence *********************************")
 
     l1 = L()
     match l1:
@@ -94,17 +86,13 @@ def test_L_match_as_sequence():
     assert m2
 
     l3 = L('a', L('b'))
-    print("test_L_match_as_sequence 3")
     match l3:
         case funalg.EL:
             m3 = False
-            print("[]")
         case ['a']:
             m3 = False
-            print("['a']")
         case ['a', 'b']:
             m3 = True
-            print("['a', 'b']")
     assert m3
 
 
@@ -233,8 +221,6 @@ def test_L_getitem():
     assert l3[2] == 'c'
 
     
-    
-
 
 def test_V():
 
@@ -242,8 +228,43 @@ def test_V():
     assert V('a') != V('b')
     assert V('a') != V('x')
     
-    with pytest.raises(Exception) as e_info:
+    with pytest.raises(Exception):
         seval(V('x'), {})
+
+def test_certified():
+
+    assert certified(True) is True
+    assert certified(False) is False
+    assert certified(None) is None
+    assert certified("umpalumpa") is None
+    assert certified(CExpr()) is None
+    assert certified(CExpr(certified=True)) is True
+    assert certified(CExpr(certified=False)) is False
+
+def test_verified():
+
+    assert verified(True) is True
+    assert verified(False) is False
+    assert verified(None) is False
+    assert verified("umpalumpa") is False
+    assert verified(CExpr()) is False
+    assert verified(CExpr(certified=True)) is True
+    assert verified(CExpr(certified=False)) is False
+
+def test_falsified():
+
+    assert falsified(True) is False
+    assert falsified(False) is True
+    assert falsified(None) is False
+    assert falsified("umpalumpa") is False
+    assert falsified(CExpr()) is False
+    assert falsified(CExpr(certified=True)) is False
+    assert falsified(CExpr(certified=False)) is True
+
+    
+    
+    
+
 
 def test_tail():
 
@@ -252,4 +273,32 @@ def test_tail():
     assert tail(L('a', L('b'))) == L('b')
     assert tail(L('a', L('b', L('c')))) == L('b', L('c'))
 
+def test_eq_eq():
+    assert Eq(Not(True),False,certified=True) == Eq(Not(True),False,certified=True)
+
+
+def test_not_expr():
+    n = Not(True)
+    assert n.e is True
+    assert n.certified is False
+    
+    n = Not(False)
+    assert n.e is False
+    assert n.certified is True
+
+    n = Not(True, certified=False)
+    assert n.e is True
+    assert n.certified is False
+
+    n = Not(False, certified=True)
+    assert n.e is False
+    assert n.certified is True
+
+    with pytest.raises(ValueError):
+        n = Not(True, certified=True)
+
+    with pytest.raises(ValueError):
+        n = Not(False, certified=False)
+
+    
     

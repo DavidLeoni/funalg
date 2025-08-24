@@ -11,12 +11,12 @@ def test_tail():
 
 
 def test_head():
-    
+
     assert head(L()) == Err()
     assert head(L('a')) == 'a'
     assert head(L('a', L('b'))) == 'a'
     assert head(L('a', L('b', L('c')))) == 'a'
     assert head(L(L('a'))) == L('a')
 
-    
+
     

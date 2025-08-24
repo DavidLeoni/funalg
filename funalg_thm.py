@@ -43,14 +43,14 @@ class Theorems:
         e = ex.ex.e
         
         if e == True:
-            eq   = not_true_ax(e)    # produces a verified  not(True) == False
-            sweq = eq_comm(eq)     # produces a verified  False == not(True)   
-            notnott = subst_eq(sweq, not_false_ax)  # applies not_false_ax to not(True) to get a verified not(not(True))
+            eq   = not_true_ax(e)    # produces a certified  not(True) == False
+            sweq = eq_comm(eq)     # produces a certified  False == not(True)   
+            notnott = subst_eq(sweq, not_false_ax)  # applies not_false_ax to not(True) to get a certified not(not(True))
             # goal: Not(Not(True)) == True
             return trutheq(notnott, True)
         else:
-            v = not_false_ax(e)   # produces a verified Not(False)  (which is True)
-            return not_true_ax(v) # produces a verified  Not(Not(False)) == False  
+            v = not_false_ax(e)   # produces a certified Not(False)  (which is True)
+            return not_true_ax(v) # produces a certified  Not(Not(False)) == False  
              
 
     def eqtrans_v1(a : Expr, b : Expr, c : Expr):
@@ -59,7 +59,7 @@ class Theorems:
 
     def eqtrans_v2(eq1 : Eq, eq2 : Eq):
         match eq1, eq2: 
-            case Eq(a,b1, verified=True), Eq(b2,c, verified=True) if b1 == b2:  return ideq(eq1, eq2)
+            case Eq(a,b1, certified=True), Eq(b2,c, certified=True) if b1 == b2:  return ideq(eq1, eq2)
             case _ : assert False
 
     @magic

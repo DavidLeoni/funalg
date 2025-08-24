@@ -1,4 +1,6 @@
 
+debug_show_certified = False
+
 from typing import TypeVar, Generic, List, Callable, Union, Any, Iterable, TypeVarTuple
 import collections
 
@@ -21,17 +23,17 @@ class Empty(Generic[T]):
 # Base symbolic expression
 # -----------------------------
 class CExpr(Generic[*Ts]):
-    __match_args__ = ("verified",)
+    __match_args__ = ("certified",)
 
     """Base symbolic expression."""
-    def __init__(self, verified: bool = False):
-        self.verified = verified
+    def __init__(self, certified: bool = None):
+        self.certified = certified
 
     def seval(self, env):
         raise NotImplemented("TODO IMPLEMENT ME!")
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(verified={self.verified})"
+        return f"{self.__class__.__name__}({self.certis()})"
 
     def __str__(self):
         return self.__repr__()
@@ -41,8 +43,11 @@ class CExpr(Generic[*Ts]):
         """
         if other is None or other.__class__ != self.__class__:
             return False
-        return self is other
+        return self.__dict__ == other.__dict__
 
+    def certis(self): 
+        return f"certified={certified(self)}" if debug_show_certified and certified(self) is not None else ""
+        
 type Expr = CExpr | Bool | list | str | tuple
 
 class ErrIter:
@@ -79,8 +84,23 @@ class Err(CExpr):
             return False
         return self.__class__ is other.__class__  #  so tail(L('a')) == Err() works
 
+def certified(obj):
+    """ A certified object has been proved to eventually evaluate to exactly True or False """
+    if type(obj) is bool:
+        return obj
+    elif isinstance(obj, CExpr):
+        return obj.certified
+    else:
+        return None
+
 def verified(obj):
-    return obj is True or (isinstance(obj, CExpr) and obj.verified)
+    """ A verified object has been proved to eventually evaluate to exactly True """
+    return obj is True or (isinstance(obj, CExpr) and obj.certified is True)
+
+def falsified(obj):
+    """ A falsified object has been proved to eventually evaluate to exactly False """
+    return obj is False or (isinstance(obj, CExpr) and obj.certified is False)
+
 
 class V(CExpr):
     """Symbolic variabl."""
@@ -88,7 +108,7 @@ class V(CExpr):
     __match_args__ = ("name",)
 
     def __init__(self, name: str):
-        super().__init__(verified=False)
+        super().__init__(certified=False)
         self.name = name
 
     def __repr__(self):
@@ -96,11 +116,6 @@ class V(CExpr):
 
     def __str__(self):
         return self.__repr__() # self.name maybe later
-
-    def __eq__(self, other):
-        if other is None or other.__class__ != self.__class__:
-            return False
-        return self.name == other.name
 
     def seval(self, env):
         raise Exception(f"Unbounded variable {repr(self)}")
@@ -156,7 +171,7 @@ class L(CExpr, collections.abc.Sequence[T]):
             lst = [f"L({repr(e)}" for e in self]
             ret = ', '.join(lst) + (')' * len(lst))
         
-        return ret # + (' [verified]' if self.verified else '')
+        return ret # + (' [certified]' if self.certified else '')
 
     def __iter__(self):
         return LIter(self)
@@ -208,20 +223,24 @@ EL = L()
 
 class BinOp(CExpr[T,U]):
 
-    def __init__(self,a : T,b : U):
+    def __init__(self,a : T, b : U, certified=False):
+        super().__init__(certified=certified)
         self.a = a
         self.b = b        
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.a},{self.b})"
-
+        c = f', {self.certis()}'
+        return f"{self.__class__.__name__}({self.a}, {self.b}{c})"
+        
 class UniOp(CExpr[T]):
 
-    def __init__(self, e):
+    def __init__(self, e, certified=False):
+        super().__init__(certified=certified)
         self.e = e
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.e})"
+        c = f', {self.certis()}'
+        return f"{self.__class__.__name__}({self.e}{c})"
 
 
 class Return(UniOp[T]):
@@ -321,6 +340,17 @@ class Or(BinOp):
     pass
 
 class Not(UniOp[T]):
+    def __init__(self, e, certified=None):
+        
+        if e is True or e is False:
+            if certified is not None and certified is e:
+                raise ValueError(f"Inconsistent certified value while creating Not({e}, certified={certified})")
+            self.certified = not e
+        else:
+            self.certified = certified
+
+        self.e = e
+        
     def seval(self, env):
         return not self.e.seval(env)
 
