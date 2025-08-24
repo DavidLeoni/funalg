@@ -1,5 +1,5 @@
 
-from typing import TypeVar, Generic, List, Callable, Union, Any, Iterable
+from typing import TypeVar, Generic, List, Callable, Union, Any, Iterable, TypeVarTuple
 import collections
 
 # -----------------------------
@@ -7,6 +7,10 @@ import collections
 # -----------------------------
 
 T = TypeVar("T")  
+U = TypeVar("U")
+Ts = TypeVarTuple("Ts")
+
+type Bool = True | False
 
 class Empty(Generic[T]):
     """Represents an empty object of a given type C"""
@@ -16,7 +20,7 @@ class Empty(Generic[T]):
 # -----------------------------
 # Base symbolic expression
 # -----------------------------
-class Expr:
+class CExpr(Generic[*Ts]):
     __match_args__ = ("verified",)
 
     """Base symbolic expression."""
@@ -39,13 +43,14 @@ class Expr:
             return False
         return self is other
 
+type Expr = CExpr | Bool | list | str | tuple
 
 class ErrIter:
 
     def __next__(self):
         raise StopIteration()    
 
-class Err(Expr):
+class Err(CExpr):
     """Represents an error in computation"""
     
     def __init__(self, *args):
@@ -74,8 +79,10 @@ class Err(Expr):
             return False
         return self.__class__ is other.__class__  #  so tail(L('a')) == Err() works
 
+def verified(obj):
+    return obj is True or (isinstance(obj, CExpr) and obj.verified)
 
-class V(Expr):
+class V(CExpr):
     """Symbolic variabl."""
 
     __match_args__ = ("name",)
@@ -117,7 +124,7 @@ class LIter:
 
 EL = None
 
-class L(Expr, collections.abc.Sequence[T]):
+class L(CExpr, collections.abc.Sequence[T]):
     """Symbolic finite list."""
 
     __match_args__ = ("head", "tail")
@@ -168,6 +175,12 @@ class L(Expr, collections.abc.Sequence[T]):
         rest = len(self.tail) if self.tail else 0
         return 1 + rest
 
+
+    """ not needed as we're overriding __len__ so Python automatically uses that to check truthiness      
+    def __bool__(self):
+        return self.head is None
+    """
+
     def __getitem__(self, index):  
         if type(index) != int:
             raise TypeError(f"Wrong index type (expected int): {type(index)}")
@@ -181,10 +194,9 @@ class L(Expr, collections.abc.Sequence[T]):
             c += 1
         
         raise IndexError(f"Index exceeds list length: {index}")
-    '''     
-    def __bool__(self):
-        return self.head is None
-    '''
+    
+    
+
     def seval(self, env):
         h = self.head.seval() if self.head else None
         t = self.tail.seval() if self.tail else None
@@ -193,16 +205,26 @@ class L(Expr, collections.abc.Sequence[T]):
 EL = L()
 
 
-def tail(lst: L) -> L:
-    match lst:
-        #case L():   # can't use it because of weird Python __match_args__ rules
-        case       []:  return Err()    # ok because our L is also a collection.abc.Sequence
-        case [x, *xs]:  return L(xs)
 
-#def subst(old_vars : L[Var], new_vars : L[Var], expr : Expr) -> Expr:
+class BinOp(CExpr[T,U]):
+
+    def __init__(self,a : T,b : U):
+        self.a = a
+        self.b = b        
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.a},{self.b})"
+
+class UniOp(CExpr[T]):
+
+    def __init__(self, e):
+        self.e = e
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.e})"
 
 
-class Return(Expr):
+class Return(UniOp[T]):
 
     __match_args__ = ("expr",)
 
@@ -213,7 +235,7 @@ class Return(Expr):
         ret = self.expr.seval()
         return ret
 
-class Call(Expr):
+class Call(CExpr):
 
     __match_args__ = ("funv", "args")
 
@@ -244,16 +266,16 @@ class Call(Expr):
         return ret
 
 
-class Case(Expr):
+class Case(CExpr):
 
     __match_args__ = ("pattern", "body")
 
-    def __init__(self, pattern : Call, body : Expr):
+    def __init__(self, pattern : Call, body : CExpr):
         self.pattern = pattern
         self.body = body
 
 
-class Match(Expr):
+class Match(CExpr):
 
     __match_args__ = ("pattern", "cases")
 
@@ -261,7 +283,7 @@ class Match(Expr):
         self.pattern = pattern
         self.cases = list(cases)
 
-class FunDef(Expr):
+class FunDef(CExpr):
 
     __match_args__ = ("name", "args", "body")
 
@@ -273,19 +295,11 @@ class FunDef(Expr):
     def seval(self):
         return self
 
+class Rest(UniOp[T]):
+    pass
 
-Tail = FunDef(  "tail", 
-                L(V("lst")), 
-                Match(V("lst"), 
-                    Case(   EL, 
-                            Return(Err)),
 
-                    Case(   L(V("x"), V("xs")), 
-                            Return(V("xs")))
-                    )
-)
-
-def seval(expr : Expr):
+def seval(expr : CExpr):
     return expr.seval()
 
 #class FunCall(Expr):
@@ -298,20 +312,7 @@ class Tokens:
         name = f"x{Axioms.varc}"
         return V(name)
 
-
-
-
-class BinOp(Expr):
-
-    def __init__(self, a,b):
-        self.a = a
-        self.b = b        
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}({self.a},{self.b})"
-
-class Eq(BinOp):
-    pass
+###############  Booleans
 
 class And(BinOp):
     pass
@@ -319,30 +320,41 @@ class And(BinOp):
 class Or(BinOp):
     pass
 
-class Not(BinOp):
+class Not(UniOp[T]):
+    def seval(self, env):
+        return not self.e.seval(env)
+
+class Eq(BinOp):
     pass
 
 
+################  Functions
 
-class Axioms:
-    """ Holds all axioms
-    """
-    def ideq(lhs : Expr, rhs : Expr):
-        assert lhs == rhs
-        return Eq(lhs, rhs, verified=True)
+def tail(lst: L) -> L:
+    match lst:
+        #case L():   # can't use it because of weird Python __match_args__ rules
+        case       []:  return Err()    # ok because our L is also a collection.abc.Sequence
+        case [x, *xs]:  return L(xs)
 
-    def andax(ea : Expr, eb : Expr ):
-        assert ea.verified
-        assert eb.verified
-        return And(ea, eb, verified=True)
+Tail = FunDef(  "tail", 
+                L(V("lst")), 
+                Match(V("lst"), 
+                    Case(   EL,
+                            Return(Err)),
 
-    def orax(ea : Expr, eb : Expr ):
-        assert ea.verified or eb.verified
-        return Or(ea, eb, verified=True)
+                    Case(   L(V("x"), Rest(V("xs"))), 
+                            Return(V("xs")))
+                    )
+)
 
-    def notax(expr : Expr):
-        assert expr.verified and not expr
-        return Not(expr, verified=True)
+
+def head(lst: L) -> L:
+    match lst:
+        case        []: return Err()
+        case  [x, *xs]: return x
+        
+
+#def subst(old_vars : L[Var], new_vars : L[Var], expr : Expr) -> Expr:
 
 
 def magic(func):
@@ -356,47 +368,8 @@ def magic(func):
         func()
     return wrapper
 
-class Theorems:
-    """ Holds all theorems
-    """
-
-    def ideq_comm(a, b):
-        """ a==b -> b==a """
-        assert ideq(a,b)
-        return ideq(b,a)
-
-
-    def and_comm(e):
-        match e:
-            case And(a,b): return andax(b,a)
-
-    def and_t(e):
-        return andax(e, True)     
-
-    def or_f(e):
-        return orax(e, False)
-
-    def eqtrans_v1(a : Expr, b : Expr, c : Expr):
-        ideq(a, b) and ideq(b, c)
-        return ideq(a, c)
-
-    def eqtrans_v2(eq1 : Eq, eq2 : Eq):
-        match eq1, eq2: 
-            case Eq(a,b1, verified=True), Eq(b2,c, verified=True) if b1 == b2:  return ideq(eq1, eq2)
-            case _ : assert False
-
-    @magic
-    def eqtrans_v3(eq1 : Eq, eq2 : Eq):
-        """ would like very much to write just 'b' without numbers but Python throws a SyntaxError
-            missing stuff would be fixed by @magic decorator 
-        """
-        match eq1, eq2: 
-            case Eq(a,b1, True),  Eq(b2,c, v=True) : Eq(a, c, True)
-            case _                                 : assert False
-
-
 """
-    def tail_eadd(expr : Expr):
-        match expr:
-            case  [head]:
+def tail_eadd(expr : Expr):
+    match expr:
+        case  [head]:
 """

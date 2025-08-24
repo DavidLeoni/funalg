@@ -179,6 +179,14 @@ def test_L_len():
     assert len(L('a', L('b', L('c')))) == 3
 
 
+def test_L_truthy_falsy():
+    """ Note: we don't override __bool__ as we already override __len__ and Python automatically uses that """
+    assert L('a')
+    assert L('a', L('b'))
+    assert bool(L()) is False
+    assert bool(L('a')) is True
+    assert not L()
+
 def test_L_iter():
     
     l0 = L()
@@ -224,10 +232,6 @@ def test_L_getitem():
     assert l3[1] == 'b'
     assert l3[2] == 'c'
 
-def test_L_bool():
-    assert not L()
-    assert L('a')
-    assert L('a', L('b'))
     
     
 
