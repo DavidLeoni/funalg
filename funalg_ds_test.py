@@ -231,15 +231,26 @@ def test_V():
     with pytest.raises(Exception):
         seval(V('x'), {})
 
+def test_get_certificate():
+
+    assert get_certificate(True) is True
+    assert get_certificate(False) is False
+    assert get_certificate(None) is None
+    assert get_certificate("umpalumpa") is None
+    assert get_certificate(CExpr()) is None
+    assert get_certificate(CExpr(certificate=True)) is True
+    assert get_certificate(CExpr(certificate=False)) is False
+
 def test_certified():
 
     assert certified(True) is True
-    assert certified(False) is False
-    assert certified(None) is None
-    assert certified("umpalumpa") is None
-    assert certified(CExpr()) is None
-    assert certified(CExpr(certified=True)) is True
-    assert certified(CExpr(certified=False)) is False
+    assert certified(False) is True
+    assert certified(None) is False
+    assert certified("umpalumpa") is False
+    assert certified(CExpr()) is False
+    assert certified(CExpr(certificate=True)) is True
+    assert certified(CExpr(certificate=False)) is True
+
 
 def test_verified():
 
@@ -248,8 +259,8 @@ def test_verified():
     assert verified(None) is False
     assert verified("umpalumpa") is False
     assert verified(CExpr()) is False
-    assert verified(CExpr(certified=True)) is True
-    assert verified(CExpr(certified=False)) is False
+    assert verified(CExpr(certificate=True)) is True
+    assert verified(CExpr(certificate=False)) is False
 
 def test_falsified():
 
@@ -258,8 +269,8 @@ def test_falsified():
     assert falsified(None) is False
     assert falsified("umpalumpa") is False
     assert falsified(CExpr()) is False
-    assert falsified(CExpr(certified=True)) is False
-    assert falsified(CExpr(certified=False)) is True
+    assert falsified(CExpr(certificate=True)) is False
+    assert falsified(CExpr(certificate=False)) is True
 
     
     
@@ -274,31 +285,31 @@ def test_tail():
     assert tail(L('a', L('b', L('c')))) == L('b', L('c'))
 
 def test_eq_eq():
-    assert Eq(Not(True),False,certified=True) == Eq(Not(True),False,certified=True)
+    assert Eq(Not(True),False,certificate=True) == Eq(Not(True),False,certificate=True)
 
 
 def test_not_expr():
     n = Not(True)
     assert n.e is True
-    assert n.certified is False
+    assert n.certificate is False
     
     n = Not(False)
     assert n.e is False
-    assert n.certified is True
+    assert n.certificate is True
 
-    n = Not(True, certified=False)
+    n = Not(True, certificate=False)
     assert n.e is True
-    assert n.certified is False
+    assert n.certificate is False
 
-    n = Not(False, certified=True)
+    n = Not(False, certificate=True)
     assert n.e is False
-    assert n.certified is True
+    assert n.certificate is True
 
     with pytest.raises(ValueError):
-        n = Not(True, certified=True)
+        n = Not(True, certificate=True)
 
     with pytest.raises(ValueError):
-        n = Not(False, certified=False)
+        n = Not(False, certificate=False)
 
     
     
