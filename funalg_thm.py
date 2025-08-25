@@ -75,7 +75,7 @@ def eqtrans_v1(a : Expr, b : Expr, c : Expr):
 
 def eqtrans_v2(eq1 : Eq, eq2 : Eq):
     match eq1, eq2: 
-        case Eq(a,b1, certificate=True), Eq(b2,c, certificate=True) if b1 == b2:  return ideq(eq1, eq2)
+        case Eq(a,b1, cert=True), Eq(b2,c, cert=True) if b1 == b2:  return ideq(eq1, eq2)
         case _ : assert False
 
 @magic

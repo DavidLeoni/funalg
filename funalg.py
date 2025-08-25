@@ -1,5 +1,5 @@
 
-debug_show_certificate = False
+debug_show_cert = False
 
 from typing import TypeVar, Generic, List, Callable, Union, Any, Iterable, TypeVarTuple
 import collections
@@ -23,11 +23,11 @@ class Empty(Generic[T]):
 # Base symbolic expression
 # -----------------------------
 class CExpr(Generic[*Ts]):
-    __match_args__ = ("certificate",)
+    __match_args__ = ("cert",)
 
     """Base symbolic expression."""
-    def __init__(self, certificate: bool = None):
-        self.certificate = certificate
+    def __init__(self, cert: bool = None):
+        self.cert = cert
 
     def seval(self, env):
         raise NotImplemented("TODO IMPLEMENT ME!")
@@ -46,7 +46,7 @@ class CExpr(Generic[*Ts]):
         return self.__dict__ == other.__dict__
 
     def certis(self): 
-        return f"certificate={self.certificate}" if debug_show_certificate and certified(self) else ""
+        return f"cert={self.cert}" if debug_show_cert and certified(self) else ""
         
 type Expr = CExpr | Bool | list | str | tuple
 
@@ -84,12 +84,12 @@ class Err(CExpr):
             return False
         return self.__class__ is other.__class__  #  so tail(L('a')) == Err() works
 
-def get_certificate(obj) -> bool | None:
+def get_cert(obj) -> bool | None:
     """ A certified object has been proved to eventually evaluate to exactly True or False """
     if type(obj) is bool:
         return obj
     elif isinstance(obj, CExpr):
-        return obj.certificate
+        return obj.cert
     else:
         return None
 
@@ -98,18 +98,18 @@ def certified(obj) -> bool:
     if type(obj) is bool:
         return True
     elif isinstance(obj, CExpr):
-        return obj.certificate is not None
+        return obj.cert is not None
     else:
         return False
 
 
 def verified(obj) -> bool:
     """ A verified object has been proved to eventually evaluate to exactly True """
-    return obj is True or (isinstance(obj, CExpr) and obj.certificate is True)
+    return obj is True or (isinstance(obj, CExpr) and obj.cert is True)
 
 def falsified(obj) -> bool:
     """ A falsified object has been proved to eventually evaluate to exactly False """
-    return obj is False or (isinstance(obj, CExpr) and obj.certificate is False)
+    return obj is False or (isinstance(obj, CExpr) and obj.cert is False)
 
 
 class V(CExpr):
@@ -118,7 +118,7 @@ class V(CExpr):
     __match_args__ = ("name",)
 
     def __init__(self, name: str):
-        super().__init__(certificate=False)
+        super().__init__(cert=False)
         self.name = name
 
     def __repr__(self):
@@ -181,7 +181,7 @@ class L(CExpr, collections.abc.Sequence[T]):
             lst = [f"L({repr(e)}" for e in self]
             ret = ', '.join(lst) + (')' * len(lst))
         
-        return ret # + (' [certificate]' if self.certificate else '')
+        return ret # + (' [cert]' if self.cert else '')
 
     def __iter__(self):
         return LIter(self)
@@ -233,8 +233,8 @@ EL = L()
 
 class BinOp(CExpr[T,U]):
 
-    def __init__(self,a : T, b : U, certificate=False):
-        super().__init__(certificate=certificate)
+    def __init__(self,a : T, b : U, cert=False):
+        super().__init__(cert=cert)
         self.a = a
         self.b = b        
 
@@ -244,8 +244,8 @@ class BinOp(CExpr[T,U]):
         
 class UniOp(CExpr[T]):
 
-    def __init__(self, e, certificate=False):
-        super().__init__(certificate=certificate)
+    def __init__(self, e, cert=False):
+        super().__init__(cert=cert)
         self.e = e
 
     def __repr__(self):
@@ -350,14 +350,14 @@ class Or(BinOp):
     pass
 
 class Not(UniOp[T]):
-    def __init__(self, e, certificate=None):
+    def __init__(self, e, cert=None):
         
         if certified(e):
-            if certificate is not None and certificate is e:
-                raise ValueError(f"Inconsistent certificate value while creating Not({e}, certificate={certificate})")
-            self.certificate = not get_certificate(e)
+            if cert is not None and cert is e:
+                raise ValueError(f"Inconsistent cert value while creating Not({e}, cert={cert})")
+            self.cert = not get_cert(e)
         else:
-            self.certificate = certificate
+            self.cert = cert
 
         self.e = e
         
