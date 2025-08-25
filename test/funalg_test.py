@@ -1,7 +1,12 @@
 import pytest
 from funalg import *
 
+
 import funalg
+
+from typing import Literal, Union, Tuple
+from enum import Enum
+
 
 class T:
     __match_args__ = ("p",)
@@ -34,6 +39,12 @@ def test_match():
             m2 = True
     assert m2
 
+def test_CExpr_copy():
+    """ TODO """
+    ex1 = CExpr(cert=True)
+    #c = ex1.copy()
+    #assert c.cert is True
+    
 def test_L_match_structural():
     """ Shows we need stupid __match_args__ attr in classes, if not present assert m2 fails
 
@@ -223,13 +234,31 @@ def test_L_getitem():
     
 
 def test_V():
-
+    global debug_show_cert
     assert V('x') == V('x')
     assert V('a') != V('b')
     assert V('a') != V('x')
-    
+
+
+    assert V('x', int) == V('x', int)
+    assert V('x', int) != V('x', bool)
+
+    assert V('a', int) != V('b', int)
+    assert V('a', int) != V('x', int)
+
+    old = debug_show_cert
+    debug_show_cert = True
+    assert repr(V('a')) == "V('a')"
+    assert repr(V('a',int)) == "V('a',int)"
+    assert repr(V('a',int,cert=True)) == "V('a',int,cert=True)"
+    assert repr(V('a',int,cert=False)) == "V('a',int,cert=False)"
+    assert repr(V('a',int,cert=None)) == "V('a',int)"
+    debug_show_cert = old
+
     with pytest.raises(Exception):
         seval(V('x'), {})
+
+
 
 def test_get_cert():
 
@@ -272,17 +301,7 @@ def test_falsified():
     assert falsified(CExpr(cert=True)) is False
     assert falsified(CExpr(cert=False)) is True
 
-    
-    
-    
 
-
-def test_tail():
-
-    assert tail(L()) == Err()
-    assert tail(L('a')) == EL
-    assert tail(L('a', L('b'))) == L('b')
-    assert tail(L('a', L('b', L('c')))) == L('b', L('c'))
 
 def test_eq_eq():
     assert Eq(Not(True),False,cert=True) == Eq(Not(True),False,cert=True)
@@ -312,4 +331,44 @@ def test_not_expr():
         n = Not(False, cert=False)
 
     
+def test_ebool():
+    """ TODO not sure EBool is needed """ 
     
+    assert not (TRUE  is True)
+    assert not (FALSE  is False)    
+    
+
+    assert bool(TRUE)  is True
+    assert bool(FALSE) is False
+    
+    assert (not FALSE) is True
+
+    assert repr(TRUE)  == 'TRUE'
+    assert repr(FALSE) == 'FALSE'
+    
+    assert TRUE == True
+    assert TRUE != False
+    
+    assert FALSE == False
+    assert FALSE != True
+    
+def test_enumerate_finite_type():
+
+    class Color(Enum):
+        RED = 1
+        GREEN = 2
+        BLUE = 3
+
+    assert enumerate_finite_type(Literal["x", "y"]) == ["x", "y"]
+    assert enumerate_finite_type(bool) == [True, False]
+    assert set(enumerate_finite_type(bool | None)) == {True, False, None}
+    assert set(enumerate_finite_type(Union[bool, None])) == {True, False, None}
+    assert set(enumerate_finite_type(Tuple[Literal[1, 2], Color])) == {
+        (1, Color.RED),
+        (1, Color.GREEN),
+        (1, Color.BLUE),
+        (2, Color.RED),
+        (2, Color.GREEN),
+        (2, Color.BLUE),
+    }
+

@@ -1,6 +1,9 @@
 import pytest
 from funalg import *
 import funalg
+from funalg_fun import *
+import funalg_fun
+
 
 def test_tail():
 

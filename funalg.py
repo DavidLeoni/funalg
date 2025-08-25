@@ -2,7 +2,13 @@
 debug_show_cert = False
 
 from typing import TypeVar, Generic, List, Callable, Union, Any, Iterable, TypeVarTuple
+from typing import Self
 import collections
+
+from typing import Literal, Union, get_args, get_origin
+from types import UnionType
+from enum import Enum
+import itertools
 
 # -----------------------------
 # Special objects
@@ -19,6 +25,9 @@ class Empty(Generic[T]):
     def __repr__(self):
         return "Empty"
 
+
+
+
 # -----------------------------
 # Base symbolic expression
 # -----------------------------
@@ -29,7 +38,7 @@ class CExpr(Generic[*Ts]):
     def __init__(self, cert: bool = None):
         self.cert = cert
 
-    def seval(self, env):
+    def seval(self, env) -> Self:
         raise NotImplemented("TODO IMPLEMENT ME!")
 
     def __repr__(self):
@@ -45,9 +54,13 @@ class CExpr(Generic[*Ts]):
             return False
         return self.__dict__ == other.__dict__
 
-    def certis(self): 
+    def certis(self) -> str: 
         return f"cert={self.cert}" if debug_show_cert and certified(self) else ""
         
+    def walk(self) -> list[Self]:
+        return []        
+
+
 type Expr = CExpr | Bool | list | str | tuple
 
 class ErrIter:
@@ -112,17 +125,54 @@ def falsified(obj) -> bool:
     return obj is False or (isinstance(obj, CExpr) and obj.cert is False)
 
 
-class V(CExpr):
-    """Symbolic variabl."""
+#type EBool = Expr[Bool]  # ?
+
+
+class EBool(CExpr):  
+    """ TODO Experimental type, probably redundant
+    """
+
+    def __init__(self, name : str, tf : bool, cert : bool = None):
+        super().__init__(cert=cert)
+
+        self.name = name
+        self.tf = tf
+        
+
+    def __bool__(self):
+        return self.tf
+
+    def __repr__(self):
+        return self.name 
+
+    def __eq__(self, other):
+        if type(other) is bool:
+            return self.tf is other
+        elif type(other) is EBool:
+            return self is other
+        else:
+            return False
+
+TRUE = EBool('TRUE', True, cert=True)
+FALSE = EBool('FALSE', False, cert=False)
+
+
+class V(CExpr[T]):
+    """ Symbolic variable """
 
     __match_args__ = ("name",)
 
-    def __init__(self, name: str):
-        super().__init__(cert=False)
+    def __init__(self, name: str, t: type = None, cert:bool = None):
+        super().__init__(cert)
         self.name = name
+        self.type = t
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.name})"
+        args = ''
+        st = f",{self.type.__name__}" if self.type else '' 
+        cert = self.certis()
+        certi = ',' + cert if cert else ''
+        return f"{self.__class__.__name__}({repr(self.name)}{st}{certi})"
 
     def __str__(self):
         return self.__repr__() # self.name maybe later
@@ -227,11 +277,16 @@ class L(CExpr, collections.abc.Sequence[T]):
         t = self.tail.seval() if self.tail else None
         return L(h,t)
 
+
+    def walk(self) -> list[CExpr]:
+        return list(self)
+
 EL = L()
 
 
 
-class BinOp(CExpr[T,U]):
+class BinOp(CExpr[T]): 
+    """ To keep things simple,  T is for both inputs and output type """
 
     def __init__(self,a : T, b : U, cert=False):
         super().__init__(cert=cert)
@@ -241,8 +296,13 @@ class BinOp(CExpr[T,U]):
     def __repr__(self):
         c = f', {self.certis()}'
         return f"{self.__class__.__name__}({self.a}, {self.b}{c})"
-        
-class UniOp(CExpr[T]):
+
+    def walk(self) -> list[CExpr]:
+        return [self.a, self.b]
+
+
+class UniOp(CExpr[T]): 
+    """ To keep things simple, T is both input and output type """
 
     def __init__(self, e, cert=False):
         super().__init__(cert=cert)
@@ -252,6 +312,8 @@ class UniOp(CExpr[T]):
         c = f', {self.certis()}'
         return f"{self.__class__.__name__}({self.e}{c})"
 
+    def walk(self) -> list[CExpr]:
+        return [self.e]
 
 class Return(UniOp[T]):
 
@@ -264,11 +326,53 @@ class Return(UniOp[T]):
         ret = self.expr.seval()
         return ret
 
+class Fun(Generic[*Ts, T], CExpr[[*Ts,T]]):
+    """ adding Generic[*Ts, T] because Python 3.12.3 is dumb
+    """
+
+    __match_args__ = ("args", "body")
+
+    def __init__(self, args : [*Ts], body : CExpr[T]):
+        self.args = args
+        self.body = body 
+
+    def seval(self, env):
+        return self
+
+    def walk(self) -> list[CExpr]:
+        return [self.args, self.body]
+
+class Def(CExpr[T]):   
+    """ Represents an assignment, sounds better than Ass  O_o'
+        - since everything is immutable there's no (shouldn't) be double defs)
+        - Let's just have var type and expression coincide for now ....
+    """
+
+    __match_args__ = ("v", "e")
+
+    def __init__(self, v : V[T], e : T):
+        self.v = v
+        self.e = e 
+
+    def seval(self, env):
+        #return [v:] + env
+        raise Exception("TODO IMPLEMENT ME!")
+
+    def walk(self) -> list[CExpr]:
+        return [self.v, self.e]
+
+
+class FunDef(Generic[*Ts, T], Def[Fun[*Ts, T]]):  # adding Generic[*Ts, T] because Python 3.12.3 is dumb
+    """ adding Generic[*Ts, T] because Python 3.12.3 is dumb
+    """
+    pass
+
+
 class Call(CExpr):
 
     __match_args__ = ("funv", "args")
 
-    def __init__(funv: V, args: L):
+    def __init__(funv: V[Fun], args: L):
         self.funv = funv
         self.args = args
 
@@ -294,6 +398,9 @@ class Call(CExpr):
         
         return ret
 
+    def walk(self) -> list[CExpr]:
+        return [self.funv, self.args]
+
 
 class Case(CExpr):
 
@@ -302,6 +409,9 @@ class Case(CExpr):
     def __init__(self, pattern : Call, body : CExpr):
         self.pattern = pattern
         self.body = body
+
+    def walk(self) -> list[CExpr]:
+        return [self.pattern, self.body]
 
 
 class Match(CExpr):
@@ -312,17 +422,10 @@ class Match(CExpr):
         self.pattern = pattern
         self.cases = list(cases)
 
-class FunDef(CExpr):
+    def walk(self) -> list[CExpr]:
+        return [self.pattern, self.cases]
 
-    __match_args__ = ("name", "args", "body")
 
-    def __init__(self, name: str, args : L, body):
-        self.name = name
-        self.args = args
-        self.body = body 
-
-    def seval(self):
-        return self
 
 class Rest(UniOp[T]):
     pass
@@ -367,35 +470,12 @@ class Not(UniOp[T]):
 class Eq(BinOp):
     pass
 
-
-################  Functions
-
-def tail(lst: L) -> L:
-    match lst:
-        #case L():   # can't use it because of weird Python __match_args__ rules
-        case       []:  return Err()    # ok because our L is also a collection.abc.Sequence
-        case [x, *xs]:  return L(xs)
-
-Tail = FunDef(  "tail", 
-                L(V("lst")), 
-                Match(V("lst"), 
-                    Case(   EL,
-                            Return(Err)),
-
-                    Case(   L(V("x"), Rest(V("xs"))), 
-                            Return(V("xs")))
-                    )
-)
-
-
-def head(lst: L) -> L:
-    match lst:
-        case        []: return Err()
-        case  [x, *xs]: return x
         
+def subst(old_var : V[T], new_var : V[T], expr : Expr) -> Expr:
+    raise Exception("TODO IMPLEMENT ME!")
 
-#def subst(old_vars : L[Var], new_vars : L[Var], expr : Expr) -> Expr:
-
+def substs(old_vars : L[V], new_vars : L[V], expr : Expr) -> Expr:
+    raise Exception("TODO IMPLEMENT ME!")
 
 def magic(func):
     """ Experimental decorator for theorems, currently does nothing. In thoery, it could:
@@ -413,3 +493,46 @@ def tail_eadd(expr : Expr):
     match expr:
         case  [head]:
 """
+
+
+def enumerate_finite_type(tp : type) -> list[type]:
+    """Return all possible values for a *finite* type annotation.
+    
+        TODO incomplete, probably buggy
+    """
+
+    origin = get_origin(tp)
+    args = get_args(tp)
+
+    # Handle Literal types
+    if origin is Literal:
+        return list(args)
+
+    # Handle Enums
+    if isinstance(tp, type) and issubclass(tp, Enum):
+        return list(tp)
+
+    # Handle bool explicitly
+    if tp is bool:
+        return [True, False]
+
+    # Handle NoneType
+    if tp is type(None):
+        return [None]
+
+    # Handle Unions
+    if origin is Union or origin is UnionType:
+        results = []
+        for arg in args:
+            results.extend(enumerate_finite_type(arg))
+        return results
+
+    # Handle tuples of finite types
+    if origin is tuple or origin is Tuple:
+        sublists = [enumerate_finite_type(arg) for arg in args]
+        return [tuple(comb) for comb in itertools.product(*sublists)]
+
+    # Could extend with ranges, TypedDict, etc.
+    raise TypeError(f"Don't know how to enumerate {tp}")
+
+
